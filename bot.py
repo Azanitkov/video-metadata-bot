@@ -9,7 +9,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=TOKEN)
 
 app = Flask(__name__)
-application = Application.builder().token(TOKEN).build()
+application = Application.builder().token(TOKEN).connection_pool_size(20).build()
 
 async def analyze_video(file_path):
     media_info = MediaInfo.parse(file_path)
