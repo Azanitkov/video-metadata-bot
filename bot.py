@@ -75,27 +75,23 @@ def generate_questions(data: dict, n=4):
             if correct is None:
                 break
             fake = correct
-            # Число
             if str(correct).isdigit():
-                shift = random.choice([-20000, -10000, -1000, 1000, 10000, 20000])
+                shift = random.randint(-30, 30) * 1000
                 fake = str(max(1, int(correct) + shift))
-            # Разрешение
             elif "x" in correct and all(part.strip().isdigit() for part in correct.split("x")):
                 w, h = map(int, correct.split("x"))
-                w += random.choice([-80, -40, 40, 80])
-                h += random.choice([-60, -30, 30, 60])
+                w += random.randint(-100, 100)
+                h += random.randint(-100, 100)
                 fake = f"{max(1,w)}x{max(1,h)}"
-            # FPS
             elif str(correct).replace(".", "").isdigit():
                 try:
                     val = float(correct)
-                    val += random.choice([-5.0, -2.5, 1.5, 3.0])
-                    fake = f"{max(1.0, round(val, 2))}"
+                    val += random.uniform(-5.0, 5.0)
+                    fake = f"{max(0.1, round(val, 2))}"
                 except:
                     pass
-            # Простой текст
             elif isinstance(correct, str) and len(correct) < 20:
-                noise = random.choice(["_Pro", "_Lite", "_v2", "_Test", "_Raw"])
+                noise = random.choice(["_Pro", "_Lite", "_v2", "_X", "_dev"])
                 fake = correct + noise
             else:
                 fake = f"{correct}_alt"
@@ -126,6 +122,7 @@ def generate_questions(data: dict, n=4):
         })
 
     return questions
+
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
