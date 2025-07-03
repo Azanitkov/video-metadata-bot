@@ -12,6 +12,8 @@ from telegram.ext import (
     ContextTypes,
 )
 from pymediainfo import MediaInfo
+from PIL import Image
+from PIL.ExifTags import TAGS
 
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
@@ -51,6 +53,21 @@ async def analyze_video(file_path: str) -> dict:
         data["Аудио кодек"] = audio.codec_id
 
     return data
+
+
+def analyze_photo(file_path: str) -> dict:
+    data = {}
+    try:
+        image = Image.open(file_path)
+        exif_data = image._getexif()
+        if exif_data:
+            for tag_id, value in exif_data.items():
+                tag = TAGS.get(tag_id, tag_id)
+                data[str(tag)] = str(value)
+    except Exception as e:
+        data["Ошибка"] = str(e)
+    return data
+
 
 def generate_questions(data: dict, n=4):
     friendly_phrases = {
