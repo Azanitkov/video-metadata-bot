@@ -52,7 +52,6 @@ async def analyze_video(file_path: str) -> dict:
 
     return data
 
-
 def generate_questions(data: dict, n=4):
     keys = list(data.keys())
     if len(keys) < n:
@@ -88,7 +87,6 @@ def generate_questions(data: dict, n=4):
 
     return questions
 
-
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in user_data or not user_data[user_id].get("metadata"):
@@ -100,7 +98,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[user_id]["questions"] = generate_questions(user_data[user_id]["metadata"], 4)
     await send_question(update, context, user_id)
 
-
 async def send_question(update, context, user_id):
     q_index = user_data[user_id]["current_q"]
     question = user_data[user_id]["questions"][q_index]
@@ -110,18 +107,11 @@ async def send_question(update, context, user_id):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(
-            question["question"], reply_markup=reply_markup
-        )
-    else:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=question["question"],
-            reply_markup=reply_markup,
-        )
-
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=question["question"],
+        reply_markup=reply_markup,
+    )
 
 async def handle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -162,7 +152,6 @@ async def handle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[user_id].pop("score", None)
         user_data[user_id].pop("current_q", None)
 
-
 def get_comment(score, total):
     percent = score / total
     if percent == 1:
@@ -173,7 +162,6 @@ def get_comment(score, total):
         return "🙂 Неплохо, но можно лучше!"
     else:
         return "😢 Нужно потренироваться."
-
 
 async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     video = update.message.video or update.message.document
@@ -190,7 +178,6 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[update.effective_user.id] = user_data.get(update.effective_user.id, {})
         user_data[update.effective_user.id]["metadata"] = metadata
 
-        # После анализа показываем выбор — кнопки
         keyboard = [
             [
                 InlineKeyboardButton("📊 Показать метаданные", callback_data="show_data"),
@@ -199,8 +186,9 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.message.reply_text(
-            "Видео успешно проанализировано! Что вы хотите сделать?",
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="🎥 Видео успешно проанализировано! Что вы хотите сделать?",
             reply_markup=reply_markup,
         )
     except Exception as e:
@@ -208,7 +196,6 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
-
 
 async def handle_action_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -226,25 +213,17 @@ async def handle_action_buttons(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(text)
 
     elif query.data == "start_game":
-        # Инициализируем игру заново
-        if user_id not in user_data or not user_data[user_id].get("metadata"):
-            await query.edit_message_text("❌ Сначала отправьте видео для анализа, чтобы начать игру.")
-            return
-        user_data[user_id]["score"] = 0
-        user_data[user_id]["current_q"] = 0
-        user_data[user_id]["questions"] = generate_questions(user_data[user_id]["metadata"], 4)
-        await send_question(update, context, user_id)
+        await start_game(update, context)
 
     else:
         await query.edit_message_text("❌ Неизвестное действие.")
 
-
 async def handle_non_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Это не видео. Пожалуйста, отправьте видеофайл для анализа метаданных.")
 
-
+application.add_handler(CommandHandler("game", start_game))
 application.add_handler(CallbackQueryHandler(handle_action_buttons, pattern="^(show_data|start_game)$"))
-application.add_handler(CallbackQueryHandler(handle_answer, pattern="^answer\|"))
+application.add_handler(CallbackQueryHandler(handle_answer, pattern="^answer\\|"))
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
 application.add_handler(MessageHandler(~(filters.VIDEO | filters.Document.VIDEO), handle_non_video))
 
