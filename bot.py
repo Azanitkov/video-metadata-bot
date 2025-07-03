@@ -16,24 +16,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 application.add_handler(MessageHandler(filters.ALL, handle_message))
 
-# Инициализируем приложение один раз при старте
+# Инициализация приложения (делаем один раз)
 async def init_app():
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()  # или пропусти, если только webhook
+    # Для webhook polling не нужен, не вызываем .updater.start_polling()
 
-asyncio.get_event_loop().run_until_complete(init_app())
+# Запускаем инициализацию при старте
+asyncio.run(init_app())
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-
-    # Чтобы запустить async из sync в Flask, делаем так
-    return asyncio.run(application.process_update(update))
+    # Flask — синхронный, telegram.ext Application — асинхронный,
+    # чтобы запустить обработку обновления асинхронно — используем asyncio.run()
+    asyncio.run(application.process_update(update))
+    return "ok"
 
 @app.route("/")
 def index():
     return "Бот работает!"
 
 if __name__ == "__main__":
-    app.run()
+    # В боевом режиме надо запускать через gunicorn или другой WSGI сервер
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
