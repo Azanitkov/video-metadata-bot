@@ -51,8 +51,11 @@ application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, h
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    loop = asyncio.get_event_loop()
-    # Запускаем обработку в фоне, не блокируя Flask
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     loop.create_task(application.process_update(update))
     return "ok"
 
@@ -65,3 +68,4 @@ if __name__ == "__main__":
     webhook_url = f"https://web-production-72c00.up.railway.app/{TOKEN}"
     requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={webhook_url}")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
