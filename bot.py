@@ -2,20 +2,14 @@ import os
 import asyncio
 from flask import Flask, request
 from telegram import Update, Bot
-from telegram.ext import Application, MessageHandler, ContextTypes, filters
+from telegram.ext import Application, MessageHandler, CommandHandler, ContextTypes, filters
 from pymediainfo import MediaInfo
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")  # или вставь токен сюда напрямую
 bot = Bot(token=TOKEN)
 
 app = Flask(__name__)
-application = Application.builder().token(TOKEN).connection_pool_size(20).build()
-
-# Инициализация один раз при старте
-async def on_startup():
-    await application.initialize()
-
-asyncio.run(on_startup())
+application = Application.builder().token(TOKEN).build()
 
 async def analyze_video(file_path):
     media_info = MediaInfo.parse(file_path)
@@ -34,6 +28,9 @@ async def analyze_video(file_path):
 
 async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     video = update.message.video or update.message.document
+    if not video:
+        await update.message.reply_text("Пожалуйста, отправьте видеофайл.")
+        return
     file = await context.bot.get_file(video.file_id)
     file_path = f"./{video.file_id}.mp4"
     await file.download_to_drive(file_path)
@@ -44,19 +41,22 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Ошибка анализа: {e}")
     finally:
-        os.remove(file_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Отправь мне видео, я попробую его проанализировать.")
+
+application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    loop.create_task(application.process_update(update))
+    # Новый event loop для каждого запроса, чтобы избежать "event loop is closed"
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.process_update(update))
     return "ok"
 
 @app.route("/")
@@ -65,7 +65,7 @@ def index():
 
 if __name__ == "__main__":
     import requests
-    webhook_url = f"https://web-production-72c00.up.railway.app/{TOKEN}"
-    requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={webhook_url}")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    WEBHOOK_URL = f"https://your-domain.com/{TOKEN}"  # Заменить на реальный URL
+    requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={WEBHOOK_URL}")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
