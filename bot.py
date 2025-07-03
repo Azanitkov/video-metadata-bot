@@ -41,7 +41,6 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.remove(file_path)
 
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
-
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
