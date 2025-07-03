@@ -1,6 +1,5 @@
 import os
 import asyncio
-from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from pymediainfo import MediaInfo
@@ -10,64 +9,61 @@ if not TOKEN:
     raise ValueError("BOT_TOKEN env var is not set")
 
 bot = Bot(token=TOKEN)
-app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
 async def analyze_video(file_path: str) -> str:
     media_info = MediaInfo.parse(file_path)
-    general = next((t for t in media_info.tracks if t.track_type == "General"), None)
-    video = next((t for t in media_info.tracks if t.track_type == "Video"), None)
+    data = media_info.to_data()  # Получаем полную структуру метаданных как dict
 
-    report = []
-    if general and general.encoded_application:
-        report.append(f"✏️ Кодировалось через: {general.encoded_application}")
-    else:
-        report.append("⚠️ Отсутствует инфо о приложении — возможна обработка.")
-    if video:
-        report.append(f"🎞️ Кодек: {video.codec_id}, {video.width}x{video.height}")
+    # Преобразуем dict в текст, красиво форматируя
+    def format_dict(d, indent=0):
+        lines = []
+        for key, value in d.items():
+            if isinstance(value, dict):
+                lines.append(" " * indent + f"{key}:")
+                lines.extend(format_dict(value, indent + 2))
+            elif isinstance(value, list):
+                lines.append(" " * indent + f"{key}:")
+                for i, item in enumerate(value):
+                    if isinstance(item, dict):
+                        lines.append(" " * (indent + 2) + f"- item {i+1}:")
+                        lines.extend(format_dict(item, indent + 4))
+                    else:
+                        lines.append(" " * (indent + 2) + f"- {item}")
+            else:
+                lines.append(" " * indent + f"{key}: {value}")
+        return lines
 
-    return "\n".join(report or ["Не удалось найти данные."])
+    lines = format_dict(data)
+    report = "\n".join(lines)
+
+    # Если слишком длинно, можно обрезать или отправлять как файл — здесь просто обрежем до 4000 символов (Telegram лимит)
+    if len(report) > 4000:
+        report = report[:3990] + "\n...[truncated]..."
+
+    return report
 
 async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     video = update.message.video or update.message.document
+    if not video:
+        await update.message.reply_text("❌ Это не видео. Пожалуйста, отправьте видеофайл.")
+        return
+
     file = await context.bot.get_file(video.file_id)
     file_path = f"/tmp/{video.file_id}.mp4"
     await file.download_to_drive(file_path)
 
     try:
-        result = await analyze_video(file_path)
-        await update.message.reply_text(result)
+        report = await analyze_video(file_path)
+        await update.message.reply_text(f"📊 Метаданные видео:\n{report}")
     except Exception as e:
-        await update.message.reply_text(f"Ошибка анализа: {e}")
+        await update.message.reply_text(f"Ошибка при анализе видео: {e}")
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Отправьте видеофайл для анализа метаданных.")
+async def handle_non_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Пожалуйста, отправьте видеофайл для анализа метаданных.")
 
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
-application.add_handler(MessageHandler(filters.ALL & ~(filters.VIDEO | filters.Document.VIDEO), handle_message))
-
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
-async def init_app():
-    await application.initialize()
-    await application.start()
-
-loop.run_until_complete(init_app())
-
-@app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
-    json_update = request.get_json(force=True)
-    update = Update.de_json(json_update, bot)
-    return loop.run_until_complete(application.process_update(update)) or "ok"
-
-@app.route("/")
-def index():
-    return "Бот работает!"
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-
+application.add_handler(MessageHandler(~(filters.VIDEO | filters.Document.VIDEO), handle_non_video))
