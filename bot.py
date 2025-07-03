@@ -53,6 +53,57 @@ async def analyze_video(file_path: str) -> dict:
     return data
 
 def generate_questions(data: dict, n=4):
+    friendly_phrases = {
+        "Имя файла": "Как, по-твоему, называется этот файл?",
+        "Размер файла": "Какой размер у видеофайла?",
+        "Формат": "Какой формат у этого видео?",
+        "Продолжительность (мс)": "Сколько длится видео (в миллисекундах)?",
+        "Общий битрейт": "Как думаешь, какой битрейт у видео?",
+        "Дата создания": "Когда это видео было создано?",
+        "Программа кодирования": "Какой программой оно было закодировано?",
+        "Видео кодек": "Какой кодек использован для видео?",
+        "Разрешение": "Какое разрешение у видео?",
+        "FPS": "Сколько кадров в секунду в этом видео?",
+        "Соотношение сторон": "Какое у видео соотношение сторон?",
+        "Дата съемки": "Когда была съемка видео?",
+        "Аудио кодек": "Какой аудиокодек используется?"
+    }
+
+    def generate_fake_answer(key, correct):
+        fakes = set()
+        while len(fakes) < 3:
+            if correct is None:
+                break
+            fake = correct
+            # Число
+            if str(correct).isdigit():
+                shift = random.choice([-20000, -10000, -1000, 1000, 10000, 20000])
+                fake = str(max(1, int(correct) + shift))
+            # Разрешение
+            elif "x" in correct and all(part.strip().isdigit() for part in correct.split("x")):
+                w, h = map(int, correct.split("x"))
+                w += random.choice([-80, -40, 40, 80])
+                h += random.choice([-60, -30, 30, 60])
+                fake = f"{max(1,w)}x{max(1,h)}"
+            # FPS
+            elif str(correct).replace(".", "").isdigit():
+                try:
+                    val = float(correct)
+                    val += random.choice([-5.0, -2.5, 1.5, 3.0])
+                    fake = f"{max(1.0, round(val, 2))}"
+                except:
+                    pass
+            # Простой текст
+            elif isinstance(correct, str) and len(correct) < 20:
+                noise = random.choice(["_Pro", "_Lite", "_v2", "_Test", "_Raw"])
+                fake = correct + noise
+            else:
+                fake = f"{correct}_alt"
+
+            if fake != correct:
+                fakes.add(fake)
+        return list(fakes)
+
     keys = list(data.keys())
     if len(keys) < n:
         n = len(keys)
@@ -62,30 +113,20 @@ def generate_questions(data: dict, n=4):
 
     for key in selected_keys:
         correct_answer = str(data[key])
-        options = {correct_answer}
-        while len(options) < 4:
-            fake = correct_answer
-            if fake.isdigit():
-                fake = str(int(fake) + random.choice([-10, -5, 5, 10]))
-            elif "x" in fake and all(part.isdigit() for part in fake.split("x")):
-                w, h = map(int, fake.split("x"))
-                w += random.choice([-20, 20, 30, -30])
-                h += random.choice([-20, 20, 30, -30])
-                fake = f"{max(w,1)}x{max(h,1)}"
-            else:
-                fake = fake + random.choice(["_X", "99", "??", "!!"])
-            options.add(fake)
-        options = list(options)
+        options = [correct_answer] + generate_fake_answer(key, correct_answer)
         random.shuffle(options)
 
+        question_text = friendly_phrases.get(key, f"Как думаешь, что указано в «{key}»?")
+
         questions.append({
-            "question": f"Что из перечисленного — значение для '{key}'?",
+            "question": question_text,
             "correct": correct_answer,
             "options": options,
             "key": key
         })
 
     return questions
+
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
