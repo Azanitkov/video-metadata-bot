@@ -6,37 +6,35 @@ from telegram.ext import Application, MessageHandler, ContextTypes, filters
 
 TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=TOKEN)
-app = Flask(__name__)
 
+app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
-# Обработчик сообщений (пример)
+# Обработчик сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет!")
+    await update.message.reply_text("Привет! Я работаю через webhook! 🎯")
 
+# Регистрация обработчика
 application.add_handler(MessageHandler(filters.ALL, handle_message))
 
-# Инициализация приложения (делаем один раз)
-async def init_app():
-    await application.initialize()
-    await application.start()
-    # Для webhook polling не нужен, не вызываем .updater.start_polling()
-
-# Запускаем инициализацию при старте
-asyncio.run(init_app())
-
+# Flask endpoint для webhook
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    # Flask — синхронный, telegram.ext Application — асинхронный,
-    # чтобы запустить обработку обновления асинхронно — используем asyncio.run()
-    asyncio.run(application.process_update(update))
-    return "ok"
+    asyncio.create_task(application.process_update(update))
+    return "ok", 200
 
+# Главная страница для теста
 @app.route("/")
 def index():
-    return "Бот работает!"
+    return "Бот работает!", 200
+
+# Инициализация и запуск бота
+async def startup():
+    await application.initialize()
+    await application.start()
+
+asyncio.get_event_loop().run_until_complete(startup())
 
 if __name__ == "__main__":
-    # В боевом режиме надо запускать через gunicorn или другой WSGI сервер
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
