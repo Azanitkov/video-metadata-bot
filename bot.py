@@ -60,4 +60,4 @@ if __name__ == "__main__":
     import requests
     webhook_url = f"https://web-production-72c00.up.railway.app/{TOKEN}"
     requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={webhook_url}")
-    ap
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
