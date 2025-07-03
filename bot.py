@@ -14,34 +14,35 @@ app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
 
-# 🔍 Анализ и форматирование ВСЕХ метаданных
+# 🔍 Анализ метаданных
 async def analyze_video(file_path: str) -> str:
     media_info = MediaInfo.parse(file_path)
-    data = media_info.to_data()
+    general = next((t for t in media_info.tracks if t.track_type == "General"), None)
+    video = next((t for t in media_info.tracks if t.track_type == "Video"), None)
+    audio = next((t for t in media_info.tracks if t.track_type == "Audio"), None)
 
-    def format_dict(d, indent=0):
-        lines = []
-        for key, value in d.items():
-            if isinstance(value, dict):
-                lines.append(" " * indent + f"{key}:")
-                lines.extend(format_dict(value, indent + 2))
-            elif isinstance(value, list):
-                lines.append(" " * indent + f"{key}:")
-                for i, item in enumerate(value):
-                    if isinstance(item, dict):
-                        lines.append(" " * (indent + 2) + f"- item {i + 1}:")
-                        lines.extend(format_dict(item, indent + 4))
-                    else:
-                        lines.append(" " * (indent + 2) + f"- {item}")
-            else:
-                lines.append(" " * indent + f"{key}: {value}")
-        return lines
+    report = []
 
-    report = "\n".join(format_dict(data))
+    if general:
+        report.append(f"📁 Имя файла: {os.path.basename(file_path)}")
+        report.append(f"💾 Размер файла: {general.file_size} байт")
+        report.append(f"📦 Формат: {general.format}")
+        report.append(f"⏱️ Продолжительность: {general.duration} мс")
+        report.append(f"📡 Общий битрейт: {general.overall_bit_rate} бит/с")
+        report.append(f"📅 Дата создания: {general.encoded_date or general.tagged_date}")
+        report.append(f"🛠️ Программа кодирования: {general.encoded_application or 'Не указана'}")
 
-    if len(report) > 4000:
-        return report[:3990] + "\n...[Обрезано из-за лимита Telegram]..."
-    return report or "⚠️ Не удалось получить метаданные."
+    if video:
+        report.append(f"🎞️ Видео кодек: {video.codec_id}")
+        report.append(f"📐 Разрешение: {video.width}x{video.height}")
+        report.append(f"🎯 FPS: {video.frame_rate}")
+        report.append(f"🔲 Соотношение сторон: {video.display_aspect_ratio}")
+        report.append(f"📅 Дата съёмки: {video.recorded_date or 'Не указана'}")
+
+    if audio:
+        report.append(f"🔊 Аудио кодек: {audio.codec_id}")
+
+    return "\n".join(filter(None, report)) or "⚠️ Не удалось извлечь метаданные."
 
 
 # ✅ Обработка видео
