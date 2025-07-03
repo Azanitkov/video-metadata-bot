@@ -19,7 +19,7 @@ async def analyze_video(file_path):
     report = []
     if general and general.encoded_application:
         report.append(f"✏️ Кодировалось через: {general.encoded_application}")
-    if not general or not general.encoded_application:
+    else:
         report.append("⚠️ Отсутствует инфа о приложении — возможна обработка.")
     if video:
         report.append(f"🎞️ Кодек: {video.codec_id}, {video.width}x{video.height}")
@@ -45,7 +45,12 @@ application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, h
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    asyncio.run(application.process_update(update))
+
+    async def handle():
+        await application.initialize()  # 🔑 ВАЖНО: инициализация
+        await application.process_update(update)
+
+    asyncio.run(handle())
     return "ok"
 
 @app.route("/")
@@ -56,4 +61,4 @@ if __name__ == "__main__":
     import requests
     webhook_url = f"https://web-production-72c00.up.railway.app/{TOKEN}"
     requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={webhook_url}")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    ap
