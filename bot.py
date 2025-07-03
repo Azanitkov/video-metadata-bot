@@ -49,19 +49,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
 application.add_handler(MessageHandler(filters.ALL & ~(filters.VIDEO | filters.Document.VIDEO), handle_message))
 
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+async def init_app():
+    await application.initialize()
+    await application.start()
+
+loop.run_until_complete(init_app())
+
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(application.process_update(update))
-    return "ok"
+    json_update = request.get_json(force=True)
+    update = Update.de_json(json_update, bot)
+    return loop.run_until_complete(application.process_update(update)) or "ok"
 
 @app.route("/")
 def index():
     return "Бот работает!"
 
 if __name__ == "__main__":
-    import os
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
