@@ -62,8 +62,6 @@ def index():
     return "Бот работает!"
 
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(application.initialize())
-    loop.run_until_complete(application.start())
-    app.run(host="0.0.0.0", port=in
+    import os
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
