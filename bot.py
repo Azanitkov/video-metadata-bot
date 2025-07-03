@@ -73,7 +73,11 @@ def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+
+    # 👉 Важно: сначала initialize()
+    loop.run_until_complete(application.initialize())
     loop.run_until_complete(application.process_update(update))
+
     return "ok"
 
 @app.route("/")
