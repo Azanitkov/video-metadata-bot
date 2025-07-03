@@ -47,18 +47,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Отправьте видеофайл для анализа метаданных.")
 
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
-application.add_handler(MessageHandler(filters.ALL & ~ (filters.VIDEO | filters.Document.VIDEO), handle_message))
+application.add_handler(MessageHandler(filters.ALL & ~(filters.VIDEO | filters.Document.VIDEO), handle_message))
 
-async def init():
-    await application.initialize()
-    await application.start()
-
-asyncio.run(init())
+# Инициализировать приложение при старте Flask
+@app.before_first_request
+def before_first_request():
+    # Запускаем initialize и start в отдельном таске, чтобы не блокировать Flask
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.initialize())
+    loop.run_until_complete(application.start())
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    asyncio.run(application.process_update(update))
+
+    # Здесь запускаем процесс обновления в синхронном контексте через новый event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.process_update(update))
+
     return "ok"
 
 @app.route("/")
@@ -66,4 +74,4 @@ def index():
     return "Бот работает!"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
