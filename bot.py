@@ -11,6 +11,12 @@ bot = Bot(token=TOKEN)
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).connection_pool_size(20).build()
 
+# Инициализация один раз при старте
+async def on_startup():
+    await application.initialize()
+
+asyncio.run(on_startup())
+
 async def analyze_video(file_path):
     media_info = MediaInfo.parse(file_path)
     general = next((t for t in media_info.tracks if t.track_type == "General"), None)
@@ -41,15 +47,13 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.remove(file_path)
 
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
+
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-
-    async def handle():
-        await application.initialize()  # 🔑 ВАЖНО: инициализация
-        await application.process_update(update)
-
-    asyncio.run(handle())
+    loop = asyncio.get_event_loop()
+    # Запускаем обработку в фоне, не блокируя Flask
+    loop.create_task(application.process_update(update))
     return "ok"
 
 @app.route("/")
