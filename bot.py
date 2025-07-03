@@ -1,5 +1,13 @@
 import os
 import asyncio
+import logging
+import sys
+
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(message)s'
+)
 from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
