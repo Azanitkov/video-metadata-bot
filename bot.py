@@ -1,5 +1,6 @@
 import os
 import asyncio
+from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from pymediainfo import MediaInfo
@@ -10,12 +11,12 @@ if not TOKEN:
 
 bot = Bot(token=TOKEN)
 application = Application.builder().token(TOKEN).build()
+app = Flask(__name__)
 
 async def analyze_video(file_path: str) -> str:
     media_info = MediaInfo.parse(file_path)
-    data = media_info.to_data()  # Получаем полную структуру метаданных как dict
+    data = media_info.to_data()
 
-    # Преобразуем dict в текст, красиво форматируя
     def format_dict(d, indent=0):
         lines = []
         for key, value in d.items():
@@ -37,7 +38,6 @@ async def analyze_video(file_path: str) -> str:
     lines = format_dict(data)
     report = "\n".join(lines)
 
-    # Если слишком длинно, можно обрезать или отправлять как файл — здесь просто обрежем до 4000 символов (Telegram лимит)
     if len(report) > 4000:
         report = report[:3990] + "\n...[truncated]..."
 
@@ -67,3 +67,19 @@ async def handle_non_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
 application.add_handler(MessageHandler(~(filters.VIDEO | filters.Document.VIDEO), handle_non_video))
+
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.process_update(update))
+    return "ok"
+
+@app.route("/")
+def index():
+    return "Бот работает!"
+
+if __name__ == "__main__":
+    PORT = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=PORT)
