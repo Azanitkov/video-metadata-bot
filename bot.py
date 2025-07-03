@@ -7,13 +7,13 @@ from pymediainfo import MediaInfo
 
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
-    raise ValueError("BOT_TOKEN environment variable is not set")
+    raise ValueError("BOT_TOKEN env var is not set")
 
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
 
-async def analyze_video(file_path):
+async def analyze_video(file_path: str) -> str:
     media_info = MediaInfo.parse(file_path)
     general = next((t for t in media_info.tracks if t.track_type == "General"), None)
     video = next((t for t in media_info.tracks if t.track_type == "Video"), None)
@@ -22,33 +22,38 @@ async def analyze_video(file_path):
     if general and general.encoded_application:
         report.append(f"✏️ Кодировалось через: {general.encoded_application}")
     else:
-        report.append("⚠️ Информация о приложении не найдена — возможно, видео редактировалось.")
+        report.append("⚠️ Отсутствует инфо о приложении — возможна обработка.")
     if video:
-        report.append(f"🎞️ Кодек: {video.codec_id}, разрешение: {video.width}x{video.height}")
+        report.append(f"🎞️ Кодек: {video.codec_id}, {video.width}x{video.height}")
 
-    return "\n".join(report or ["Не удалось получить данные о видео."])
+    return "\n".join(report or ["Не удалось найти данные."])
 
 async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     video = update.message.video or update.message.document
-    if not video:
-        await update.message.reply_text("Это не видео.")
-        return
-
     file = await context.bot.get_file(video.file_id)
-    file_path = f"./{video.file_id}.mp4"
+    file_path = f"/tmp/{video.file_id}.mp4"
     await file.download_to_drive(file_path)
 
     try:
         result = await analyze_video(file_path)
         await update.message.reply_text(result)
     except Exception as e:
-        await update.message.reply_text(f"Ошибка при анализе видео: {e}")
+        await update.message.reply_text(f"Ошибка анализа: {e}")
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
 
-# Обработчик видео
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Отправьте видеофайл для анализа метаданных.")
+
 application.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
+application.add_handler(MessageHandler(filters.ALL & ~ (filters.VIDEO | filters.Document.VIDEO), handle_message))
+
+async def init():
+    await application.initialize()
+    await application.start()
+
+asyncio.run(init())
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
@@ -62,4 +67,3 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
